@@ -730,36 +730,28 @@ X11_SetWindowTitle(_THIS, SDL_Window * window)
 {
     SDL_WindowData *data = (SDL_WindowData *) window->driverdata;
     Display *display = data->videodata->display;
+    XTextProperty titleprop;
     Status status;
     const char *title = window->title ? window->title : "";
-    char *title_ascii = NULL;
+    char *title_locale = NULL;
 
-    Atom WM_NAME = data->videodata->WM_NAME;
 #ifdef X_HAVE_UTF8_STRING
     Atom UTF8_STRING = data->videodata->UTF8_STRING;
     Atom _NET_WM_NAME = data->videodata->_NET_WM_NAME;
 #endif
 
-    title_ascii = SDL_iconv_string("ASCII", "UTF-8", title, SDL_strlen(title)+1);
-    if (!title_ascii) {
+    title_locale = SDL_iconv_utf8_locale(title);
+    if (!title_locale) {
         SDL_OutOfMemory();
         return;
     }
 
-    status = X11_XChangeProperty(display, data->xwindow, WM_NAME, XA_STRING, 8, PropModeReplace, (const unsigned char *) title_ascii, strlen(title_ascii));
-
-    if (status != 1) {
-        char *x11_error = NULL;
-        char x11_error_locale[256];
-        if (X11_XGetErrorText(display, status, x11_error_locale, sizeof(x11_error_locale)) == Success)
-        {
-            x11_error = SDL_iconv_string("UTF-8", "", x11_error_locale, SDL_strlen(x11_error_locale)+1);
-            SDL_LogDebug(SDL_LOG_CATEGORY_VIDEO, "Error when setting X11 window title to %s: %s\n", title_ascii, x11_error);
-            SDL_free(x11_error);
-        }
+    status = X11_XmbTextListToTextProperty(display, &title_locale, 1, XStdICCTextStyle, &titleprop);
+    SDL_free(title_locale);
+    if (status) {
+      X11_XSetWMName(display, data->xwindow, &titleprop);
+      X11_XFree(titleprop.value);
     }
-
-    SDL_free(title_ascii);
 
 #ifdef X_HAVE_UTF8_STRING
     if (SDL_X11_HAVE_UTF8) {
